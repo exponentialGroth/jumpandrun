@@ -1,0 +1,12 @@
+background_song:
+	Music by Bensound
+	License code: GTXVCVALSRQI14D5
+background_song_2:
+	Music by <a href="https://pixabay.com/users/daddy_s_music-22836301/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=9489">Daddy_s_Music</a> from <a href="https://pixabay.com/music//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=9489">Pixabay</a>
+dying_player_song:
+	Music by <a href="https://pixabay.com/users/lesfm-22579021/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=5688">Lesfm</a> from <a href="https://pixabay.com/music//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=5688">Pixabay</a>
+dying_enemy_sound:
+	Sound Effect by <a href="https://pixabay.com/users/universfield-28281460/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=123079">UNIVERSFIELD</a> from <a href="https://pixabay.com/sound-effects//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=123079">Pixabay</a>
+shot:
+	Jim Rogers from soundbible.com
+	under Attribution 3.0 licence (https://creativecommons.org/licenses/by/3.0/legalcode)
