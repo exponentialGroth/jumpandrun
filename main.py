@@ -212,8 +212,8 @@ class Elevator:
         """Returns coordinates for the player to prevent falling through the elevator and takes the player with it
             Returns x, y, x_additional_speed, real_vel_y
         """
-        if player_y + PLAYER_SIZE - player_vel_y <= self.y - self.vel_list[self.absolute_position][1] and player_y + PLAYER_SIZE > self.y and player_x + PLAYER_SIZE > self.x and player_x < self.x + self.width:  # only bottom
-            return player_x, self.y - PLAYER_SIZE, self.vel_list[self.absolute_position][0] if self.active else 0, player_vel_y + self.y - player_y
+        if player_y + PLAYER_SIZE - player_vel_y <= self.y - self.vel_list(self.absolute_position)[1] and player_y + PLAYER_SIZE > self.y and player_x + PLAYER_SIZE > self.x and player_x < self.x + self.width:  # only bottom
+            return player_x, self.y - PLAYER_SIZE, self.vel_list(self.absolute_position)[0] if self.active else 0, player_vel_y + self.y - player_y
 
         return player_x, player_y, 0, player_vel_y
 
@@ -226,8 +226,8 @@ class Elevator:
         self.x -= camera_speed
 
         if self.active:
-            self.x += self.vel_list[self.absolute_position][0]
-            self.y += self.vel_list[self.absolute_position][1]
+            self.x += self.vel_list(self.absolute_position)[0]
+            self.y += self.vel_list(self.absolute_position)[1]
             self.absolute_position += camera_speed
 
         self.rect.move_ip(self.x - self.rect.x, self.y - self.rect.y)
@@ -517,42 +517,29 @@ def set_up():
                 enemies.append(FlyingEnemy((11000 + 250*i + 100, 666 - PLAYER_SIZE/2 - enemy_size/2), random.randint(101 - i, 256 - 2*i), random.randint(int(1+i/10), int(12+i)), random.randint(10, 250), random.randint(int(1+i/8), int(12+i/8)), (enemy_size, enemy_size)))
 
     # Elevators
-    vel_list_1 = []
-    for i in range(4400):
-        vel_list_1.append([camera_speed, 0])
-    for i in range(900):
-        vel_list_1.append([1, -2])
-    for i in range(5000):
-        vel_list_1.append([0, 0])
+    vel_list_1 = lambda x: \
+        (camera_speed, 0) if x < 4400 \
+        else (camera_speed/2, -2) if x < 5300 \
+        else (0, 0)
 
-    vel_list_2 = []
-    for i in range(800):
-        vel_list_2.append([camera_speed - 1, 0])
-    for i in range(800):
-        vel_list_2.append([camera_speed - 1, 1])
-    for i in range(4000):
-        vel_list_2.append([0, 0])
+    vel_list_2 = lambda x: \
+        (camera_speed/2, 0) if x < 800 \
+        else (camera_speed/2, 1) if x < 1600 \
+        else (0, 0)
 
-    vel_list_3 = []
-    for i in range(500):
-        vel_list_3.append([camera_speed - 1, 0])
-    for i in range(800):
-        vel_list_3.append([camera_speed-1, 1])
-    for i in range(3000):
-        vel_list_3.append([0, 0])
+    vel_list_3 = lambda x: \
+        (camera_speed/2, 0) if x < 500 \
+        else (camera_speed/2, 1) if x < 1300 \
+        else (0, 0)
 
-    vel_list_4 = []
-    for i in range(850):
-        vel_list_4.append([camera_speed - 1, 0])
-    for i in range(800):
-        vel_list_4.append([camera_speed -1, -1])
-    for i in range(3000):
-        vel_list_4.append([0, 0])
-
-    vel_list_5 = []
-    for i in range(25000):
-        vel_list_5.append([camera_speed, 0]) 
-
+    vel_list_4 = lambda x: \
+        (camera_speed/2, 0) if x < 850 \
+        else (camera_speed/2, -1) if x < 1650 \
+        else (0, 0)
+    
+    vel_list_5 = lambda x: \
+        (camera_speed, 0)
+    
     elevator1 = Elevator(4000, 380, 150, 20, BROWN, vel_list_1)
     elevator2 = Elevator(8800, 700, 80, 15, BROWN, vel_list_2)
     elevator3 = Elevator(9250, 520, 120, 15, BROWN, vel_list_3)
