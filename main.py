@@ -710,15 +710,15 @@ def main():
         for el in elevators:
             el.update(player.distance)
 
-        for b in bullets:
+        for i, b in enumerate(bullets):
             b.update()
             if b.x > WIDTH:
-                bullets.remove(b)
+                bullets.pop(i)
 
-        for eb in enemy_bullets:
+        for i, eb in enumerate(enemy_bullets):
             eb.update()
             if eb.speed < 0 and eb.x < -BULLET_WIDTH or eb.speed > 0 and eb.x > WIDTH:
-                enemy_bullets.remove(eb)
+                enemy_bullets.pop(i)
 
         for enemy in enemies:
             enemy.update()
@@ -729,13 +729,13 @@ def main():
         player.move(ground, elevators, obstacles)
         button_for_elevator.check_for_player(player)
 
-        for b in bullets:
-            for e in enemies:
+        for i, b in enumerate(bullets):
+            for j, e in enumerate(enemies):
                 if b.collision((e.x, e.y, e.size[0], e.size[1])):
                     dying_enemy_sound.play()
-                    bullets.remove(b)
+                    bullets.pop(i)
                     if e.lives == 1:
-                        enemies.remove(e)
+                        enemies.pop(j)
                     else:
                         e.lives -= 1
 
