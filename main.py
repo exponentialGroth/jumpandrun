@@ -69,6 +69,11 @@ bullet_img_reversed = pygame.image.load(images_path / "bullet_reversed.png")
 flying_enemy_img = pygame.image.load(images_path / "enemy1.png")
 
 
+class GameState(Enum):
+    MENU = 0
+    PLAYING = 1
+    DYING = 2
+
 
 class Background:
     def __init__(self, height, color) -> None:
@@ -362,7 +367,8 @@ class Player:
         self.boosting = 1
 
 
-    def move(self, ground: Ground, elevators, obstacles):
+    def move(self, ground: Ground, elevators, obstacles) -> bool:
+        """Returns whether the player dies"""
         self.fall()
         total_x_vel = self.walking_left * -2 + self.walking_right * (3 + self.sprinting * 3) + self.x_additional_speed
         self.x += total_x_vel - camera_speed
@@ -371,8 +377,7 @@ class Player:
 
         ground_adjusted_coords = ground.handle_contact(self.x, self.y, total_x_vel, self.y_vel)
         if ground_adjusted_coords is None:
-            player.die()
-            return
+            return True
         on_ground = ground_adjusted_coords[1] < self.y
         if ground_adjusted_coords[0] != self.x or ground_adjusted_coords[1] != self.y:
             self.x_additional_speed = 0
@@ -387,11 +392,12 @@ class Player:
         
         for o in obstacles:
             if o.collides(self.x, self.y, total_x_vel, self.y_vel):
-                self.die()
-                return
+                return True
         
         if self.x + PLAYER_SIZE < 0:
-            self.die()
+            return True
+        
+        return False
 
 
     def show_distance(self):
@@ -399,44 +405,98 @@ class Player:
         WIN.blit(text, DISTANCE_POS)
 
 
-    def die(self):
-        global new_distance
-        new_distance = self.distance
+
+class Menu():
+    highscore_text: pygame.Surface = None
+    distance_text: pygame.Surface = None
+
+    def __init__(self) -> None:
+        self.highscore = self.__read_highscore()
+        self.highscore_text = highscore_font.render("Best Distance: " + str(self.highscore), True, BLACK)
+
+
+    def set_distance(self, distance):
+        self.distance_text = highscore_font.render(f"Distance: {distance:.0f} ", True, BLACK)
+        if distance > self.highscore:
+            self.highscore = int(distance)
+            self.highscore_text = highscore_font.render(f"Best Distance: {distance:.0f} ", True, BLACK)
+
+
+    def draw(self):
+        WIN.fill(MENU_COLOR)
+        WIN.blit(play_button_text, (play_button_rect.x, play_button_rect.y))
+        pygame.draw.rect(WIN, BLACK, play_button_rect, 3)
+        WIN.blit(controls_img, (100, 150))
+        WIN.blit(self.highscore_text, (WIDTH - 600, 100))
+        if self.distance_text is not None:
+            WIN.blit(self.distance_text, (WIDTH / 2 - self.distance_text.get_width()/2, 275))
+        pygame.display.update()
+
+
+    def update(self) -> GameState | None:
+        """
+        Handles user interaction
+        Returns the new game state
+        """
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return None
+
+            if event.type == pygame.MOUSEBUTTONDOWN and play_button_rect.collidepoint(event.pos) or \
+            event.type == pygame.KEYDOWN and (event.key == pygame.K_SPACE or event.key == pygame.K_RETURN):
+                dying_player_sound.fadeout(3000)
+                return GameState.PLAYING
+        return GameState.MENU
+            
+
+    def __read_highscore(self):
+        with open(highscore_path) as d:
+            lines = d.readlines()
+        return int(lines[0])
         
-        draw_window()
 
+    def __write_highscore(self, distance):
+        with open(highscore_path, "w") as d:
+            d.write(str(distance))
+
+
+    def finish(self):
+        self.__write_highscore(self.highscore)
+
+
+
+class DeathAnimation():
+    center = None
+    r = 1500
+    dr = 20
+    rects = []
+
+    def start(self):
         background_sound.fadeout(1000)
-        dying_player_sound.play(loops = -1, fade_ms=2000)
+        dying_player_sound.play(loops=-1, fade_ms=2000)        
+        self.center = (round(player.x + PLAYER_SIZE / 2), round(player.y + PLAYER_SIZE/2))
+        self.r = 1500
 
-        circle_center = (round(self.x + PLAYER_SIZE / 2), self.y)
-        circle_radius = 1500
 
-        shrinking_steps = 20
+    def update(self) -> GameState | None:
+        if pygame.QUIT in (ev.type for ev in pygame.event.get()):
+            return None
+        
+        self.rects.clear()
+        for i in range(self.center[0] - self.r, self.center[0] + 1):
+            self.rects.append(pygame.Rect(0, 0, i, self.center[1] - math.sqrt(self.r ** 2 - (self.center[0] - i) ** 2)))  # top left of player
+            self.rects.append(pygame.Rect(i + self.r, 0, WIDTH - i - self.r,  self.center[1] - math.sqrt(self.r ** 2 - (i - self.center[0] + self.r) ** 2)))  # top right
+            self.rects.append(pygame.Rect(0, self.center[1] + math.sqrt(self.r ** 2 - (self.center[0] - i) ** 2), i, HEIGHT - self.center[1] + math.sqrt(self.r ** 2 - (self.center[0] - i) ** 2)))  # bottom left
+            self.rects.append(pygame.Rect(i + self.r, self.center[1] + math.sqrt(self.r ** 2 - (i - self.center[0] + self.r) ** 2), WIDTH - i - PLAYER_SIZE/2, HEIGHT - self.center[1] + math.sqrt(self.r ** 2 - (i - self.center[0] + self.r) ** 2)))  # bottom right
 
-        clock = pygame.time.Clock()
+        self.r -= self.dr
+        return GameState.DYING if 2*self.r > PLAYER_SIZE else GameState.MENU
+    
 
-        while circle_radius > PLAYER_SIZE / 2:
-            clock.tick(60)
-
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-
-            rects_around_circle = []
-
-            for i in range(circle_center[0] - circle_radius, circle_center[0] + 1, 1):
-                rects_around_circle.append(pygame.Rect(0, 0, i, circle_center[1] - math.sqrt(circle_radius ** 2 - (circle_center[0] - i) ** 2)))  # top left of player
-                rects_around_circle.append(pygame.Rect(i + circle_radius, 0, WIDTH - i - circle_radius,  circle_center[1] - math.sqrt(circle_radius ** 2 - (i - circle_center[0] + circle_radius) ** 2)))  # top right
-                rects_around_circle.append(pygame.Rect(0, circle_center[1] + math.sqrt(circle_radius ** 2 - (circle_center[0] - i) ** 2), i, HEIGHT - circle_center[1] + math.sqrt(circle_radius ** 2 - (circle_center[0] - i) ** 2)))  # bottom left
-                rects_around_circle.append(pygame.Rect(i + circle_radius, circle_center[1] + math.sqrt(circle_radius ** 2 - (i - circle_center[0] + circle_radius) ** 2), WIDTH - i - PLAYER_SIZE/2, HEIGHT - circle_center[1] + math.sqrt(circle_radius ** 2 - (i - circle_center[0] + circle_radius) ** 2)))  # bottom right
-
-            for e in rects_around_circle:
-                pygame.draw.rect(WIN, BROWN, e)
-                
-            pygame.display.update()
-            circle_radius -= shrinking_steps
-
-        main()
+    def draw(self):
+        for rect in self.rects:
+            pygame.draw.rect(WIN, BROWN, rect)
+        pygame.display.update()
 
 
 
@@ -554,9 +614,10 @@ def set_up():
 
     bullets = []
     enemy_bullets = []
+    background_sound.play(-1, fade_ms=1000)
 
 
-def draw_window():
+def draw_game():
     background.draw()    
     ground.draw()
     player.draw_player()
@@ -580,167 +641,143 @@ def draw_window():
     pygame.display.update()
 
 
-def read_highscore():
-    d = open(highscore_path)
-    highscore = d.readlines()
-    d.close()
-    return highscore[0]
+def update_game() -> GameState | None:
+    """
+    Updates the state of the game.
+    Returns the new game state
+    """
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            return None
+
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            pass
+
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_a:
+                player.walking_left = 1
+            elif event.key == pygame.K_d:
+                player.walking_right = 1
+            elif event.key == pygame.K_RSHIFT:
+                player.sprinting = 1
+            elif event.key == pygame.K_SPACE and player.can_jump:
+                player.jump()
+            elif event.key == pygame.K_w and len(bullets) < BULLET_COUNT:
+                bullets.append(player.shoot())
+        elif event.type == pygame.KEYUP:
+            if event.key == pygame.K_a:
+                player.walking_left = 0
+            elif event.key == pygame.K_d:
+                player.walking_right = 0
+            elif event.key == pygame.K_RSHIFT:
+                player.sprinting = 0
+            elif event.key == pygame.K_SPACE:
+                player.boosting = 0
+
+
+    ground.update()
+    for o in obstacles:
+        o.update()
+    button_for_elevator.update()
     
+    if len(elevators) >= 5:
+        if button_for_elevator.active:
+            elevators[0].active = True
+        else:
+            elevators[0].active = False
 
-def write_highscore(distance):
-    d = open(highscore_path, "w")
-    d.write(str(distance))
-    d.close()
+        if player.distance >= 83:
+            elevators[1].active = True
 
+        if player.distance > 89.5:
+            elevators[2].active = True
+        
+        if player.distance > 95:
+            elevators[3].active = True
+        
+        if player.distance > 103.5:
+            elevators[4].active = True
 
-def menu():
-    start_game = False
-    clock = pygame.time.Clock()
+        if player.distance > 120:
+            del elevators[0:4]
+
+    for el in elevators:
+        el.update(player.distance)
+
+    for i, b in enumerate(bullets):
+        b.update()
+        if b.x > WIDTH:
+            bullets.pop(i)
+
+    for i, eb in enumerate(enemy_bullets):
+        eb.update()
+        if eb.speed < 0 and eb.x < -BULLET_WIDTH or eb.speed > 0 and eb.x > WIDTH:
+            enemy_bullets.pop(i)
+
+    for enemy in enemies:
+        enemy.update()
+        new_bullet = enemy.shoot((player.x, player.y))
+        if new_bullet:
+            enemy_bullets.append(new_bullet)
+
+    die = player.move(ground, elevators, obstacles)
+    button_for_elevator.check_for_player(player)
+    if die: return GameState.DYING
+
+    for i, b in enumerate(bullets):
+        for j, e in enumerate(enemies):
+            if b.collision((e.x, e.y, e.size[0], e.size[1])):
+                dying_enemy_sound.play()
+                bullets.pop(i)
+                if e.lives == 1:
+                    enemies.pop(j)
+                else:
+                    e.lives -= 1
+
+    for eb in enemy_bullets:
+        if eb.collision((player.x, player.y, PLAYER_SIZE, PLAYER_SIZE)):
+            return GameState.DYING
     
-    old_highscore = read_highscore()
-    if new_distance > int(old_highscore):
-        highscore_text = highscore_font.render(f"Best Distance: {new_distance:.0f} ", True, BLACK)
-        write_highscore(f"{new_distance:.0f}")
-    else:
-        highscore_text = highscore_font.render("Best Distance: " + str(old_highscore), True, BLACK)
+    for e in enemies:
+        if e.collision((player.x, player.y)):
+            return GameState.DYING
 
-    distance_text = highscore_font.render(f"Distance: {new_distance:.0f} ", True, BLACK)
 
-    while not start_game:
-        clock.tick(FPS)
-        
-        WIN.fill(MENU_COLOR)
-        WIN.blit(play_button_text, (play_button_rect.x, play_button_rect.y))
-        pygame.draw.rect(WIN, BLACK, play_button_rect, 3)
-        WIN.blit(controls_img, (100, 150))
-        WIN.blit(highscore_text, (WIDTH - 600, 100))
-        if new_distance > 0:
-            WIN.blit(distance_text, (WIDTH / 2 - distance_text.get_width()/2, 275))
-        pygame.display.update()
-        
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()  # TODO: end program correctly
+    if player.distance >= 222:
+        return GameState.DYING  # TODO: let him win the game instead
 
-            if event.type == pygame.MOUSEBUTTONDOWN and play_button_rect.collidepoint(event.pos) or \
-            event.type == pygame.KEYDOWN and (event.key == pygame.K_SPACE or event.key == pygame.K_RETURN) :
-                dying_player_sound.fadeout(3000)
-                start_game = True
+    return GameState.PLAYING
 
 
 def main():
-    global camera_speed
-
-    menu()
-    set_up()
+    state = GameState.MENU
+    menu = Menu()
+    deathAnim = DeathAnimation()
     clock = pygame.time.Clock()
-    run = True
-    background_sound.play(-1, fade_ms=1000)
-    while run:
+    while state is not None:
         clock.tick(FPS)
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                run=False
+        if state == GameState.MENU:
+            state = menu.update()
+            if state == GameState.MENU:
+                menu.draw()
+            elif state == GameState.PLAYING:
+                set_up()
+        elif state == GameState.PLAYING:
+            state = update_game()
+            if state is not None:
+                draw_game()
+                if state == GameState.DYING:
+                    deathAnim.start()
+        elif state == GameState.DYING:
+            state = deathAnim.update()
+            if state == GameState.DYING:
+                deathAnim.draw()
+            elif state == GameState.MENU:
+                menu.set_distance(player.distance)
 
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                pass
-
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_a:
-                    player.walking_left = 1
-                elif event.key == pygame.K_d:
-                    player.walking_right = 1
-                elif event.key == pygame.K_RSHIFT:
-                    player.sprinting = 1
-                elif event.key == pygame.K_SPACE and player.can_jump:
-                    player.jump()
-                elif event.key == pygame.K_w and len(bullets) < BULLET_COUNT:
-                    bullets.append(player.shoot())
-            elif event.type == pygame.KEYUP:
-                if event.key == pygame.K_a:
-                    player.walking_left = 0
-                elif event.key == pygame.K_d:
-                    player.walking_right = 0
-                elif event.key == pygame.K_RSHIFT:
-                    player.sprinting = 0
-                elif event.key == pygame.K_SPACE:
-                    player.boosting = 0
-
-
-        ground.update()
-        for o in obstacles:
-            o.update()
-        button_for_elevator.update()
-        
-        if len(elevators) >= 5:
-            if button_for_elevator.active:
-                elevators[0].active = True
-            else:
-                elevators[0].active = False
-
-            if player.distance >= 83:
-                elevators[1].active = True
-
-            if player.distance > 89.5:
-                elevators[2].active = True
-            
-            if player.distance > 95:
-                elevators[3].active = True
-            
-            if player.distance > 103.5:
-                elevators[4].active = True
-
-            if player.distance > 120:
-                del elevators[0:4]
-
-        for el in elevators:
-            el.update(player.distance)
-
-        for i, b in enumerate(bullets):
-            b.update()
-            if b.x > WIDTH:
-                bullets.pop(i)
-
-        for i, eb in enumerate(enemy_bullets):
-            eb.update()
-            if eb.speed < 0 and eb.x < -BULLET_WIDTH or eb.speed > 0 and eb.x > WIDTH:
-                enemy_bullets.pop(i)
-
-        for enemy in enemies:
-            enemy.update()
-            new_bullet = enemy.shoot((player.x, player.y))
-            if new_bullet:
-                enemy_bullets.append(new_bullet)
-
-        player.move(ground, elevators, obstacles)
-        button_for_elevator.check_for_player(player)
-
-        for i, b in enumerate(bullets):
-            for j, e in enumerate(enemies):
-                if b.collision((e.x, e.y, e.size[0], e.size[1])):
-                    dying_enemy_sound.play()
-                    bullets.pop(i)
-                    if e.lives == 1:
-                        enemies.pop(j)
-                    else:
-                        e.lives -= 1
-
-        for eb in enemy_bullets:
-            if eb.collision((player.x, player.y, PLAYER_SIZE, PLAYER_SIZE)):
-                player.die()
-        
-        for e in enemies:
-            if e.collision((player.x, player.y)):
-                player.die()
-
-
-        if player.distance >= 222:
-            player.die()  # TODO: let him win the game instead
-
-
-        draw_window()
-
+    menu.finish()
     pygame.quit()
 
 
